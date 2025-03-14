@@ -28,7 +28,7 @@ class Forward(BaseModel):
     con_name: str = ""
     use_this: bool = True
     source: Union[int, str] = ""
-    dest: List[Union[int, str, Dict[str, Union[int, str]]]] = []
+    dest: List[str] = []
     offset: int = 0
     end: Optional[int] = 0
 
@@ -196,11 +196,17 @@ async def load_from_to(
             continue
         src = await _(forward.source)
         destinations = []
-        for dest in forward.dest:
-            if isinstance(dest, dict) and "chat_id" in dest and "topic_id" in dest:
-                destinations.append({"chat_id": await _(dest["chat_id"]), "topic_id": int(dest["topic_id"])})
+        for dest_str in forward.dest:
+            if "/" in dest_str:
+                parts = dest_str.split("/")
+                if len(parts) == 2 and parts[0].strip() and parts[1].strip().isdigit():
+                    chat_id = await _(parts[0].strip())
+                    topic_id = int(parts[1].strip())
+                    destinations.append({"chat_id": chat_id, "topic_id": topic_id})
+                else:
+                    logging.warning(f"Invalid destination format: {dest_str}")
             else:
-                destinations.append(await _(dest))
+                destinations.append(await _(dest_str))
         from_to_dict[src] = destinations
     logging.info(f"From to dict is {from_to_dict}")
     return from_to_dict
