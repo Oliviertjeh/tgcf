@@ -61,13 +61,9 @@ async def new_message_handler(event: Union[Message, events.NewMessage]) -> None:
         topic_id = None
         destination_chat_id = None
 
-        if isinstance(dest_info, str):
-            if "/" in dest_info:
-                parts = dest_info.split("/")
-                destination_chat_id = int(parts[0])
-                topic_id = int(parts[1])
-            else:
-                destination_chat_id = int(dest_info)
+        if isinstance(dest_info, dict):
+            destination_chat_id = dest_info.get("chat_id")
+            topic_id = dest_info.get("topic_id")
         elif isinstance(dest_info, int):
             destination_chat_id = dest_info
 
@@ -116,13 +112,9 @@ async def edited_message_handler(event) -> None:
         topic_id = None
         destination_chat_id = None
 
-        if isinstance(dest_info, str):
-            if "/" in dest_info:
-                parts = dest_info.split("/")
-                destination_chat_id = int(parts[0])
-                topic_id = int(parts[1])
-            else:
-                destination_chat_id = int(dest_info)
+        if isinstance(dest_info, dict):
+            destination_chat_id = dest_info.get("chat_id")
+            topic_id = dest_info.get("topic_id")
         elif isinstance(dest_info, int):
             destination_chat_id = dest_info
 
