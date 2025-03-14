@@ -1,0 +1,6 @@
+forwards:
+  - source: YOUR_SOURCE_CHAT_ID  # Replace with the ID of the chat you want to forward from
+    dest:
+      - YOUR_DESTINATION_GROUP_ID  # Forward to the entire group
+      - {"chat_id": YOUR_DESTINATION_GROUP_ID, "topic_id": YOUR_TOPIC_ID}  # Forward to a specific topic
+      - ANOTHER_DESTINATION_GROUP_ID # Forward to another entire group
