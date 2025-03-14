@@ -28,7 +28,7 @@ class Forward(BaseModel):
     con_name: str = ""
     use_this: bool = True
     source: Union[int, str] = ""
-    dest: List[Union[int, str, Dict[str, Union[int, str]]]] = []
+    dest: List[Union[int, str]] = []
     offset: int = 0
     end: Optional[int] = 0
 
@@ -166,7 +166,7 @@ async def get_id(client: TelegramClient, peer):
 
 async def load_from_to(
     client: TelegramClient, forwards: List[Forward]
-) -> Dict[int, List[Dict[str, Union[int, None]]]]:
+) -> Dict[int, List[Union[int, Dict[str, int]]]]:
     """Convert a list of Forward objects to a mapping.
 
     Args:
@@ -175,7 +175,7 @@ async def load_from_to(
 
     Returns:
         Dict: key = chat id of source
-              value = List of dictionaries, each with 'chat_id' and optional 'topic_id'
+              value = List of chat ids of destinations
 
     Notes:
     -> The Forward objects may contain username/phn no/links
@@ -183,7 +183,7 @@ async def load_from_to(
     -> Chat ids are essential for how storage is implemented
     -> Storage is essential for edit, delete and reply syncs
     """
-    from_to_dict: Dict[int, List[Dict[str, Union[int, None]]]] = {}
+    from_to_dict: Dict[int, List[Union[int, Dict[str, int]]]] = {}
 
     async def _(peer):
         return await get_id(client, peer)
@@ -195,15 +195,35 @@ async def load_from_to(
         if not isinstance(source, int) and source.strip() == "":
             continue
         src = await _(forward.source)
-        destinations: List[Dict[str, Union[int, None]]] = []
+        destinations: List[Union[int, Dict[str, int]]] = []
         for dest_info in forward.dest:
             if isinstance(dest_info, int) or isinstance(dest_info, str):
-                destinations.append({"chat_id": await _(dest_info), "topic_id": None})
+                if isinstance(dest_info, str) and "/" in dest_info:
+                    parts = dest_info.split("/")
+                    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+                        try:
+                            chat_id = int(parts[0])
+                            topic_id = int(parts[1])
+                            destinations.append({"chat_id": chat_id, "topic_id": topic_id})
+                        except ValueError:
+                            logging.warning(f"Invalid destination format: {dest_info}")
+                    else:
+                        try:
+                            destinations.append(await _(dest_info))
+                        except ValueError:
+                            logging.warning(f"Could not resolve entity: {dest_info}")
+                else:
+                    try:
+                        destinations.append(await _(dest_info))
+                    except ValueError:
+                        logging.warning(f"Could not resolve entity: {dest_info}")
             elif isinstance(dest_info, dict):
                 chat_id = dest_info.get("chat_id")
                 topic_id = dest_info.get("topic_id")
-                if chat_id:
-                    destinations.append({"chat_id": await _(chat_id), "topic_id": topic_id if topic_id is None or isinstance(topic_id, int) else int(topic_id)})
+                if chat_id is not None:
+                    destinations.append({"chat_id": await _(str(chat_id)), "topic_id": topic_id}) # Convert chat_id to str for get_id
+                else:
+                    logging.warning(f"Invalid destination dictionary: {dest_info}")
         from_to_dict[src] = destinations
     logging.info(f"From to dict is {from_to_dict}")
     return from_to_dict
@@ -221,7 +241,6 @@ def setup_mongo(client):
     mycol = mydb[MONGO_COL_NAME]
     if not mycol.find_one({"_id": 0}):
         mycol.insert_one({"_id": 0, "author": "tgcf", "config": Config().dict()})
-
     return mycol
 
 
