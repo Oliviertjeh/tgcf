@@ -100,7 +100,7 @@ if check_password(st):
         write_config(CONFIG)
         time.sleep(2)
 
-        st.experimental_rerun()
+        st.rerun()
 
     try:
         lines = st.slider(
