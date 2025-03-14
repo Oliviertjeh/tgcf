@@ -3,7 +3,7 @@
 import logging
 import os
 import sys
-from typing import Union
+from typing import Union, Optional, Dict, List
 
 from telethon import TelegramClient, events, functions, types
 from telethon.sessions import StringSession
@@ -14,8 +14,18 @@ from tgcf import storage as st
 from tgcf.bot import get_events
 from tgcf.config import CONFIG, get_SESSION
 from tgcf.plugins import apply_plugins, load_async_plugins
-from tgcf.utils import clean_session_files, send_message
+from tgcf.utils import clean_session_files
 
+async def send_message(client: TelegramClient, chat_id: Union[int, str], message: types.Message, topic_id: Optional[int] = None) -> types.Message:
+    """Send a message to the specified chat, optionally to a topic."""
+    try:
+        if topic_id:
+            return await client.send_message(chat_id, message, message_thread_id=topic_id)
+        else:
+            return await client.send_message(chat_id, message)
+    except Exception as e:
+        logging.error(f"Error sending message to {chat_id} (topic_id: {topic_id}): {e}")
+        return None
 
 async def new_message_handler(event: Union[Message, events.NewMessage]) -> None:
     """Process new incoming messages."""
@@ -36,7 +46,7 @@ async def new_message_handler(event: Union[Message, events.NewMessage]) -> None:
             del st.stored[key]
             break
 
-    dest = config.from_to.get(chat_id)
+    destinations = config.from_to.get(chat_id)
 
     tm = await apply_plugins(message)
     if not tm:
@@ -47,11 +57,23 @@ async def new_message_handler(event: Union[Message, events.NewMessage]) -> None:
         r_event_uid = st.EventUid(r_event)
 
     st.stored[event_uid] = {}
-    for d in dest:
-        if event.is_reply and r_event_uid in st.stored:
-            tm.reply_to = st.stored.get(r_event_uid).get(d)
-        fwded_msg = await send_message(d, tm)
-        st.stored[event_uid].update({d: fwded_msg})
+    for dest_info in destinations:
+        topic_id = None
+        destination_chat_id = None
+
+        if isinstance(dest_info, dict):
+            destination_chat_id = dest_info.get("chat_id")
+            topic_id = dest_info.get("topic_id")
+        elif isinstance(dest_info, int):
+            destination_chat_id = dest_info
+
+        if destination_chat_id is not None:
+            if event.is_reply and r_event_uid in st.stored:
+                tm.reply_to = st.stored.get(r_event_uid).get(destination_chat_id)
+
+            fwded_msg = await send_message(event.client, destination_chat_id, tm, topic_id=topic_id)
+            if fwded_msg:
+                st.stored[event_uid].update({destination_chat_id: fwded_msg})
     tm.clear()
 
 
@@ -84,10 +106,20 @@ async def edited_message_handler(event) -> None:
                 await msg.edit(tm.text)
         return
 
-    dest = config.from_to.get(chat_id)
+    destinations = config.from_to.get(chat_id)
 
-    for d in dest:
-        await send_message(d, tm)
+    for dest_info in destinations:
+        topic_id = None
+        destination_chat_id = None
+
+        if isinstance(dest_info, dict):
+            destination_chat_id = dest_info.get("chat_id")
+            topic_id = dest_info.get("topic_id")
+        elif isinstance(dest_info, int):
+            destination_chat_id = dest_info
+
+        if destination_chat_id is not None:
+            await send_message(event.client, destination_chat_id, tm, topic_id=topic_id)
     tm.clear()
 
 

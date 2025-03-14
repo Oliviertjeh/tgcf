@@ -28,7 +28,7 @@ class Forward(BaseModel):
     con_name: str = ""
     use_this: bool = True
     source: Union[int, str] = ""
-    dest: List[Union[int, str]] = []
+    dest: List[Union[int, str, Dict[str, Union[int, str]]]] = []
     offset: int = 0
     end: Optional[int] = 0
 
@@ -61,7 +61,6 @@ class PastSettings(BaseModel):
 
 
 class LoginConfig(BaseModel):
-
     API_ID: int = 0
     API_HASH: str = ""
     user_type: int = 0  # 0:bot, 1:user
@@ -167,7 +166,7 @@ async def get_id(client: TelegramClient, peer):
 
 async def load_from_to(
     client: TelegramClient, forwards: List[Forward]
-) -> Dict[int, List[int]]:
+) -> Dict[int, List[Union[int, Dict[str, int]]]]:
     """Convert a list of Forward objects to a mapping.
 
     Args:
@@ -176,7 +175,7 @@ async def load_from_to(
 
     Returns:
         Dict: key = chat id of source
-                value = List of chat ids of destinations
+              value = List of chat ids or dictionaries of destinations
 
     Notes:
     -> The Forward objects may contain username/phn no/links
@@ -196,7 +195,13 @@ async def load_from_to(
         if not isinstance(source, int) and source.strip() == "":
             continue
         src = await _(forward.source)
-        from_to_dict[src] = [await _(dest) for dest in forward.dest]
+        destinations = []
+        for dest in forward.dest:
+            if isinstance(dest, dict) and "chat_id" in dest and "topic_id" in dest:
+                destinations.append({"chat_id": await _(dest["chat_id"]), "topic_id": int(dest["topic_id"])})
+            else:
+                destinations.append(await _(dest))
+        from_to_dict[src] = destinations
     logging.info(f"From to dict is {from_to_dict}")
     return from_to_dict
 
@@ -209,7 +214,6 @@ async def load_admins(client: TelegramClient):
 
 
 def setup_mongo(client):
-
     mydb = client[MONGO_DB_NAME]
     mycol = mydb[MONGO_COL_NAME]
     if not mycol.find_one({"_id": 0}):
